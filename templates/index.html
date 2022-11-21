@@ -40,12 +40,11 @@
     $(document).ready(function(){
         var client_datetime = new Date();
         const dateControl = document.querySelector('input[type="datetime-local"]');
-        dateControl.min = client_datetime.toISOString().slice(0, -8);
-        dateControl.value = client_datetime.toISOString().slice(0, -8);
+        var now = client_datetime.toISOString().slice(0, -8)
+        dateControl.min = now;
+        dateControl.value = now;
         $("button").click(function(){
-            console.log("click");
             var scheduled_at = new Date($("#scheduled_at").val()).toISOString();
-            console.log(scheduled_at);
             var data = {
                 "base_url": $("#base_url").val(),
                 "token": $("#token").val(),
@@ -54,7 +53,7 @@
                 "timezone": Intl.DateTimeFormat().resolvedOptions().timeZone
             };
             console.log(data);
-            $.post("/toot", data, function(result, status){
+            $.post(window.location.href + "/toot", data, function(result, status){
                 alert("Data: " + result + " Status: " + status);
             });
         });

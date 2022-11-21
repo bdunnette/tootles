@@ -4,10 +4,12 @@ from zoneinfo import ZoneInfo
 import iso8601
 from dotenv import load_dotenv
 from flask import Flask, render_template, request
+from flask_cors import CORS
 from mastodon import Mastodon
 from zappa.asynchronous import task
 
 app = Flask(__name__)
+CORS(app)
 app.logger.info("Starting up...")
 app.logger.info(f"Zappa is running in {app.config['ENV']} mode.")
 app.logger.info(f"DEBUG={app.debug}")
@@ -29,7 +31,6 @@ app.config.from_object(Config)
 if app.debug is True:
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.logger.info("Config loaded.")
-app.logger.debug(app.config)
 
 
 @app.route("/")
@@ -55,45 +56,40 @@ def schedule_toot(
         raise ValueError("No status provided")
     if not scheduled_at:
         raise ValueError("No scheduled_at provided")
-
+    scheduled_dt = iso8601.parse_date(scheduled_at)
+    app.logger.info(f"Scheduling toot for {scheduled_dt}")
     masto = Mastodon(
         access_token=token, api_base_url=base_url, ratelimit_method="throw"
     )
-    app.logger.debug(masto)
-    app.logger.info(f"Scheduling toot {status} for {scheduled_at} on {base_url}")
-    scheduled = masto.status_post(
-        status, scheduled_at=scheduled_at, visibility=visibility
-    )
-    app.logger.debug(scheduled)
-    app.logger.info(f"Successfully scheduled toot {scheduled['id']}")
+    masto.status_post(status, scheduled_at=scheduled_dt, visibility=visibility)
+    app.logger.info("Toot scheduled!")
 
 
 @app.route("/toot", methods=["POST"])
 def toot_scheduler():
     """This returns immediately!"""
     app.logger.debug(request.values)
-    token = request.values.get("access_token")
+    token = request.values.get("token")
     base_url = request.values.get("base_url")
     status = request.values.get("status")
     scheduled_at = request.values.get("scheduled_at")
     scheduled_dt = iso8601.parse_date(
         scheduled_at, default_timezone=ZoneInfo(request.values.get("timezone"))
     )
+    app.logger.debug(scheduled_dt)
+    scheduled_utc = scheduled_dt.astimezone(ZoneInfo("UTC")).isoformat()
+    app.logger.debug(scheduled_utc)
     visibility = request.values.get("visibility")
     if visibility not in ["public", "unlisted", "direct"]:
         visibility = "private"
-    app.logger.info(
-        f"Received request to schedule toot at {scheduled_dt} on {base_url}"
-    )
     scheduled = schedule_toot(
         base_url=base_url,
         token=token,
         status=status,
-        scheduled_at=scheduled_dt,
+        scheduled_at=scheduled_utc,
         visibility=visibility,
     )
-    app.logger.debug(scheduled)
-    return "Baking t00t now 🦣"
+    return {"scheduled": scheduled}
 
 
 if __name__ == "__main__":

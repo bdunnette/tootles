@@ -3,7 +3,15 @@
         "app_function": "app.app",
         "aws_region": "us-east-1",
         "profile_name": "default",
-        "project_name": "task",
+        "project_name": "tootles",
+        "runtime": "python3.9",
+        "s3_bucket": "zappa-hbj3zllnm"
+    },
+    "prod": {
+        "app_function": "app.app",
+        "aws_region": "us-east-1",
+        "profile_name": "default",
+        "project_name": "tootles",
         "runtime": "python3.9",
         "s3_bucket": "zappa-hbj3zllnm"
     }
