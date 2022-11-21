@@ -1,9 +1,9 @@
-import random
-from datetime import datetime, timedelta
 from os import environ, path
+from zoneinfo import ZoneInfo
 
+import iso8601
 from dotenv import load_dotenv
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from mastodon import Mastodon
 from zappa.asynchronous import task
 
@@ -21,8 +21,7 @@ class Config:
     """Flask configuration variables."""
 
     # Mastodon Config
-    API_BASE_URL = environ.get("API_BASE_URL", default="https://mspsocial.net")
-    MASTODON_ACCESS_TOKEN = environ.get("MASTODON_ACCESS_TOKEN")
+    API_BASE_URL = environ.get("API_BASE_URL", default="https://mastodon.social")
 
 
 app.config.from_object(Config)
@@ -34,8 +33,11 @@ app.logger.debug(app.config)
 
 
 @app.route("/")
-def hello_world(toot_id=None):
-    return render_template("index.html", toot_id=toot_id)
+def hello_world(
+    base_url=app.config["API_BASE_URL"],
+):
+    """Render the homepage."""
+    return render_template("index.html", base_url=base_url)
 
 
 @task
@@ -48,16 +50,16 @@ def schedule_toot(
 ):
     """This takes a long time!"""
     if not token:
-        # raise ValueError('No token provided')
-        token = app.config["MASTODON_ACCESS_TOKEN"]
+        raise ValueError("No token provided")
+    if not status:
+        raise ValueError("No status provided")
+    if not scheduled_at:
+        raise ValueError("No scheduled_at provided")
+
     masto = Mastodon(
         access_token=token, api_base_url=base_url, ratelimit_method="throw"
     )
     app.logger.debug(masto)
-    if scheduled_at is None:
-        scheduled_at = datetime.now() + timedelta(minutes=random.randint(5, 20))
-    if status is None:
-        status = f"This status was scheduled for tooting at {scheduled_at:%Y-%m-%d %H:%M:%S}. Make of that what you will."
     app.logger.info(f"Scheduling toot {status} for {scheduled_at} on {base_url}")
     scheduled = masto.status_post(
         status, scheduled_at=scheduled_at, visibility=visibility
@@ -69,8 +71,29 @@ def schedule_toot(
 @app.route("/toot", methods=["POST"])
 def toot_scheduler():
     """This returns immediately!"""
-    schedule_toot()
-    return "Your pie is being made!"
+    app.logger.debug(request.values)
+    token = request.values.get("access_token")
+    base_url = request.values.get("base_url")
+    status = request.values.get("status")
+    scheduled_at = request.values.get("scheduled_at")
+    scheduled_dt = iso8601.parse_date(
+        scheduled_at, default_timezone=ZoneInfo(request.values.get("timezone"))
+    )
+    visibility = request.values.get("visibility")
+    if visibility not in ["public", "unlisted", "direct"]:
+        visibility = "private"
+    app.logger.info(
+        f"Received request to schedule toot at {scheduled_dt} on {base_url}"
+    )
+    scheduled = schedule_toot(
+        base_url=base_url,
+        token=token,
+        status=status,
+        scheduled_at=scheduled_dt,
+        visibility=visibility,
+    )
+    app.logger.debug(scheduled)
+    return "Baking t00t now 🦣"
 
 
 if __name__ == "__main__":

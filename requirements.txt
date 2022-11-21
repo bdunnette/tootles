@@ -2,3 +2,4 @@ python-dotenv==0.21.0
 Flask==2.2.2
 Mastodon.py==1.6.2
 zappa==0.55.0
+iso8601==1.1.0
